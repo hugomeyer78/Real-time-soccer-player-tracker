@@ -1,0 +1,20 @@
+# Videos #
+######################
+*.mp4
+*.avi
+*.mov
+*.mkv
+
+# text recognition model #
+######################
+*.pb
+
+# OS generated files #
+######################
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
