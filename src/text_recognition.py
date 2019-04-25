@@ -1,4 +1,4 @@
-# USAGE
+2# USAGE
 # python text_recognition.py --east frozen_east_text_detection.pb --image images/example_01.jpg
 # python text_recognition.py --east frozen_east_text_detection.pb --image images/example_04.jpg --padding 0.05
 
@@ -8,6 +8,7 @@ import numpy as np
 import pytesseract
 import argparse
 import cv2
+from image import Image
 
 def decode_predictions(scores, geometry, min_confidence=0.5):
 	# grab the number of rows and columns from the scores volume, then
@@ -83,7 +84,7 @@ ap.add_argument("-p", "--padding", type=float, default=0.0,
 	help="amount of padding to add to each border of ROI")
 args = vars(ap.parse_args())
 '''
-def text_reco(image, w=320, h=320, padding=0):
+def text_localization(image, export_img=False, w=320, h=320):
 	# load the input image and grab the image dimensions
 	orig = image.copy()
 	(origH, origW) = image.shape[:2]
@@ -121,32 +122,37 @@ def text_reco(image, w=320, h=320, padding=0):
 	(rects, confidences) = decode_predictions(scores, geometry)
 	boxes = non_max_suppression(np.array(rects), probs=confidences)
 
-	# initialize the list of results
-	results = []
 
 	# loop over the bounding boxes
-	for (startX, startY, endX, endY) in boxes:
+	for i in range(len(boxes)):
 		# scale the bounding box coordinates based on the respective
 		# ratios
-		startX = int(startX * rW)
-		startY = int(startY * rH)
-		endX = int(endX * rW)
-		endY = int(endY * rH)
+		boxes[i][0] = int(boxes[i][0] * rW)
+		boxes[i][1] = int(boxes[i][1] * rH)
+		boxes[i][2] = int(boxes[i][2] * rW)
+		boxes[i][3] = int(boxes[i][3] * rH)
 
-		# in order to obtain a better OCR of the text we can potentially
-		# apply a bit of padding surrounding the bounding box -- here we
-		# are computing the deltas in both the x and y directions
-		dX = int((endX - startX) * padding)
-		dY = int((endY - startY) * padding)
+	return boxes
+
+
+def text_reco(img, boxes, paddingX, paddingY, label):
+	(W, H) = img.shape[:2]
+	orig = img.copy()
+	results = []
+	for i, (startX, startY, endX, endY) in enumerate(boxes):
+		dX = int((endX - startX) * paddingX)
+		dY = int((endY - startY) * paddingY)
 
 		# apply padding to each side of the bounding box, respectively
 		startX = max(0, startX - dX)
 		startY = max(0, startY - dY)
-		endX = min(origW, endX + (dX * 2))
-		endY = min(origH, endY + (dY * 2))
+		endX = min(W, endX + (dX * 2))
+		endY = min(H, endY + (dY * 2))
 
 		# extract the actual padded ROI
-		roi = orig[startY:endY, startX:endX]
+		roi = Image(orig[startY:endY, startX:endX], name='roi{:d}'.format(i))
+		roi.resize_no_distortion()
+		roi.export('../Images/Text_reco/' + label + '/')
 
 		# in order to apply Tesseract v4 to OCR text we must supply
 		# (1) a language, (2) an OEM flag of 4, indicating that the we
@@ -154,7 +160,7 @@ def text_reco(image, w=320, h=320, padding=0):
 		# (3) an OEM value, in this case, 7 which implies that we are
 		# treating the ROI as a single line of text
 		config = ("-l eng --oem 1 --psm 7")
-		text = pytesseract.image_to_string(roi, config=config)
+		text = pytesseract.image_to_string(roi.pix_vals, config=config)
 
 		# add the bounding box coordinates and OCR'd text to the list
 		# of results
@@ -169,7 +175,7 @@ def text_reco(image, w=320, h=320, padding=0):
 	for i, ((startX, startY, endX, endY), text) in enumerate(results):
 		# display the text OCR'd by Tesseract
 		#print("========")
-		#print("{}\n".format(text))
+		print("{}\n".format(text))
 
 		# strip out non-ASCII text so we can draw the text on the image
 		# using OpenCV, then draw the text and a bounding box surrounding
@@ -182,10 +188,8 @@ def text_reco(image, w=320, h=320, padding=0):
 			cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 0, 255), 3)
 
 		# show the output image
-		cv2.imwrite('../Images/Text_reco/output{:d}.png'.format(i), output)
-		textX.append((endX+startX)/2)
-		textY.append(output.shape[0]-(endY+startY)/2)
-	return np.asarray(textX), np.asarray(textY)
+		cv2.imwrite('../Images/Text_reco/' + label + '/' +'output{:d}.png'.format(i), output)
+		
 
 
 
