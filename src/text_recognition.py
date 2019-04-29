@@ -84,7 +84,7 @@ ap.add_argument("-p", "--padding", type=float, default=0.0,
 	help="amount of padding to add to each border of ROI")
 args = vars(ap.parse_args())
 '''
-def text_localization(image, export_img=False, w=320, h=320):
+def text_localization(image, w=320, h=320, export_img=False, path=''):
 	# load the input image and grab the image dimensions
 	orig = image.copy()
 	(origH, origW) = image.shape[:2]
@@ -107,7 +107,6 @@ def text_localization(image, export_img=False, w=320, h=320):
 		"feature_fusion/concat_3"]
 
 	# load the pre-trained EAST text detector
-	print("[INFO] loading EAST text detector...")
 	net = cv2.dnn.readNet('../frozen_east_text_detection.pb')
 
 	# construct a blob from the image and then perform a forward pass of
@@ -132,64 +131,46 @@ def text_localization(image, export_img=False, w=320, h=320):
 		boxes[i][2] = int(boxes[i][2] * rW)
 		boxes[i][3] = int(boxes[i][3] * rH)
 
+	if export_img:
+		output = orig.copy()
+
+		for (startX, startY, endX, endY) in boxes:
+			cv2.rectangle(output, (startX, startY), (endX, endY),
+				(0, 0, 255), 2)
+			#cv2.putText(output, text, (startX, startY - 20),
+			#	cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 0, 255), 3)
+		
+		# show the output image
+		cv2.imwrite(path, output)
+
 	return boxes
 
 
-def text_reco(img, boxes, paddingX, paddingY, label):
-	(W, H) = img.shape[:2]
-	orig = img.copy()
-	results = []
-	for i, (startX, startY, endX, endY) in enumerate(boxes):
-		dX = int((endX - startX) * paddingX)
-		dY = int((endY - startY) * paddingY)
 
-		# apply padding to each side of the bounding box, respectively
-		startX = max(0, startX - dX)
-		startY = max(0, startY - dY)
-		endX = min(W, endX + (dX * 2))
-		endY = min(H, endY + (dY * 2))
 
-		# extract the actual padded ROI
-		roi = Image(orig[startY:endY, startX:endX], name='roi{:d}'.format(i))
-		roi.resize_no_distortion()
-		roi.export('../Images/Text_reco/' + label + '/')
+def text_reco(roi):
+	# in order to apply Tesseract v4 to OCR text we must supply
+	# (1) a language, (2) an OEM flag of 4, indicating that the we
+	# wish to use the LSTM neural net model for OCR, and finally
+	# (3) an OEM value, in this case, 7 which implies that we are
+	# treating the ROI as a single line of text
+	#config = ("-l eng --oem 1 --psm 7 -c tessedit_char_whitelist=0123456789")
+	#config='--psm 10 --oem 3 -c tessedit_char_whitelist=0123456789'
+	text = pytesseract.image_to_string(roi, config="-l eng --oem 1 --psm 7")
+	#text = pytesseract.image_to_string(roi.pix_vals, config='digits')
 
-		# in order to apply Tesseract v4 to OCR text we must supply
-		# (1) a language, (2) an OEM flag of 4, indicating that the we
-		# wish to use the LSTM neural net model for OCR, and finally
-		# (3) an OEM value, in this case, 7 which implies that we are
-		# treating the ROI as a single line of text
-		config = ("-l eng --oem 1 --psm 7")
-		text = pytesseract.image_to_string(roi.pix_vals, config=config)
+	# add the bounding box coordinates and OCR'd text to the list
+	# of results
 
-		# add the bounding box coordinates and OCR'd text to the list
-		# of results
-		results.append(((startX, startY, endX, endY), text))
-
-	# sort the results bounding box coordinates from top to bottom
-	results = sorted(results, key=lambda r:r[0][1])
-
-	# loop over the results
-	textX=[]
-	textY=[]
-	for i, ((startX, startY, endX, endY), text) in enumerate(results):
 		# display the text OCR'd by Tesseract
 		#print("========")
-		print("{}\n".format(text))
 
-		# strip out non-ASCII text so we can draw the text on the image
-		# using OpenCV, then draw the text and a bounding box surrounding
-		# the text region of the input image
-		text = "".join([c if ord(c) < 128 else "" for c in text]).strip()
-		output = orig.copy()
-		cv2.rectangle(output, (startX, startY), (endX, endY),
-			(0, 0, 255), 2)
-		cv2.putText(output, text, (startX, startY - 20),
-			cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 0, 255), 3)
-
-		# show the output image
-		cv2.imwrite('../Images/Text_reco/' + label + '/' +'output{:d}.png'.format(i), output)
-		
+	# strip out non-ASCII text so we can draw the text on the image
+	# using OpenCV, then draw the text and a bounding box surrounding
+	# the text region of the input image
+	text = "".join([c if ord(c) < 128 else "" for c in text]).strip()
+	
+	return text
 
 
 
