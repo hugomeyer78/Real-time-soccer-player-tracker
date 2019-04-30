@@ -89,6 +89,17 @@ class Image(object):
             return img
         return 1
 
+
+    def padding(self, xStartPad, yStartPad, xEndPad, yEndPad):
+        (h, w) = self.pix_vals.shape[:2]
+        startX = int(xStartPad*w)
+        endX = int(w - xEndPad*w)
+        startY = int(yStartPad*h)
+        endY = int(h - yEndPad*h)
+
+        self.pix_vals = self.pix_vals[startY:endY, startX:endX] 
+
+
     def thresholding(self):
         #_,self.pix_vals = cv2.threshold(self.pix_vals,127,255,cv2.THRESH_BINARY)
         self.pix_vals = cv2.adaptiveThreshold(self.pix_vals,255,cv2.ADAPTIVE_THRESH_GAUSSIAN_C,\
